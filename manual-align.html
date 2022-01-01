@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Manual Align</title>
+    <script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.6.0.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4"
+        crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js/dist/plugin/wavesurfer.regions.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="row clearfix">
+            <div class="col-md-12 column mt-5 mb-3">
+                <h1 class="d-inline">Manual Align</h1>
+                <a class="bi bi-info-circle d-inline text-primary" onclick="msgbox(infoText,'About')" href="#"
+                    title="Show help message" data-bs-toggle="tooltip"></a>
+            </div>
+        </div>
+        <div id="pickfile" v-if='page==1'>
+            <div class="row">
+                <div class="col my-3">
+                    <p class="lead">Manually align text with audio or adjust existing alignments.</p>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col align-middle">
+                    <label for="inputaudio" class="col-sm-2 col-form-label">Select an audio: </label>
+                    <div class="col-sm-10">
+                        <input class="form-control" type="file" id="inputaudio" accept="audio/*"
+                            v-on:change='loadaudio($event)'>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col align-middle">
+                    <label for="inputtext" class="col-sm-2 col-form-label">Select a text or a JSON: </label>
+                    <div class="col-sm-10">
+                        <input class="form-control" type="file" id="inputtext" accept=".txt,.json"
+                            v-on:change='loadtext($event)'>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col align-middle my-3">
+                    <button class="btn btn-primary" id="startloading" v-bind:disabled='oktook'
+                        v-on:click='startloading'>OK</button>
+                </div>
+            </div>
+        </div>
+        <div class="bg-light row" id="loading" v-if='page==1.5'>
+            <div class="col align-middle py-3"
+                style="height: 500px;display: flex;justify-content: center;align-items: center;">
+                <h2 class="text-center"><span class="spinner-border spinner-border-sm"
+                        style="width: 3rem; height: 3rem;" role="status"
+                        aria-hidden="true">&nbsp;&nbsp;</span>Loading...</h2>
+            </div>
+        </div>
+        <div id="waver" class="d-none">
+            <div class="row text-center bg-light">
+                <div class="col m-3">
+                    <button class="btn btn-secondary" id="prev">Prev</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-secondary" id="setstart">Set Start</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-primary" id="play">Play/Pause</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-secondary" id="setend">Set
+                        End</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-secondary" id="next">Next</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-info" id="add">Add</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-danger" id="remove">(Un)Remove</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-warning" id="split">Split</button>
+                </div>
+                <div class="col m-3">
+                    <button class="btn btn-success" id="save" data-bs-toggle="tooltip" data-bs-placement="top"
+                        title="NOTE: Lines without Start or Stop time will be ignored.">Save</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col m-3">
+                    <div id="waveform"></div>
+                </div>
+            </div>
+        </div>
+        <div id="maindish" class="row m-3" v-if='page==2'>
+            <div class="col-2">
+                <input class="form-control" type="number" min="0" step="1" name="startsec" id="startsec"
+                    v-bind:max='thisdur()' v-model='thistext[curid].Start'>
+            </div>
+            <div class="col-8">
+                <textarea class="form-control" name="transcript" id="transcript" rows="5" v-on:change='changeText'
+                    v-on:input='changeText' v-model='thistext[curid].Text'></textarea>
+            </div>
+            <div class="col-2">
+                <input class="form-control" type="number" min="0" step="1" name="endsec" id="endsec"
+                    v-bind:max='thisdur()' v-model='thistext[curid].Stop'>
+            </div>
+            <div class="row my-3">
+                <div class="col" v-show="thistext[curid].deleted">
+                    <p class="text-danger">This line will be removed from the output.</p>
+                </div>
+            </div>
+            <div class="row mx-3">
+                <div class="col">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th scope="col">Lines</th>
+                                <th scope="col">Start</th>
+                                <th scope="col">End</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for='i in thistext' :key='i.index' v-bind:class='{ "table-active": curid==i.index }'
+                                v-on:click='clk(i.index)'>
+                                <td>
+                                    <p :id="'id'+i.index">{{ i.Text }}</p>
+                                </td>
+                                <td>{{ i.Start }}</td>
+                                <td>{{ i.Stop }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col bg-info align-middle py-3">
+            <p class="text-center text-light">Made by <a href="https://github.com/godspirit00" target="_blank"
+                    class="text-light">@godspirit00</a>.</p>
+        </div>
+    </div>
+    </div>
+
+    <div class="modal fade" id="msgbox" tabindex="-1" role="dialog" aria-labelledby="msgbox" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="msgboxTitle">Attention</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                    </button>
+                </div>
+                <div class="modal-body" id="msgboxBody">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-warning" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="promptBox" tabindex="-1" role="dialog" aria-labelledby="promptBox" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="promptTitle">Please input</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col">
+                            <p id="promptText"></p>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <div class="col"><input type="text" class="form-control" id="promptInput">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="dlgok" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                    <button id="dlgcancel" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function msgbox(body, title = "Attention") {
+            $("#msgboxTitle").text(title);
+            $("#msgboxBody").html(body);
+            $("#msgbox").modal("show");
+        }
+
+        function promptbox(body, title = "Prompt", callback) {
+            $("#promptTitle").text(title);
+            $("#promptText").html(body);
+            $("#promptBox").modal("show");
+            if (typeof callback == 'function') {
+                $("#dlgok").click(() => callback($("#promptInput").val().trim()));
+                $("#dlgcancel").click(() => callback(false));
+            }
+        }
+        $("#promptBox").on('hide.bs.modal', () => {
+            $("#dlgok").unbind("click");
+            $("#dlgcancel").unbind("click");
+        });
+        $("#promptBox").on("shown.bs.modal", () => {
+            let t = $("#promptInput");
+            t.focus();
+            t.select();
+        });
+        $("#promptBox").find("#promptInput").keypress((event) => {
+            if (event.which == 13) {
+                event.preventDefault();
+                $("#dlgok").click();
+            }
+        });
+    </script>
+    <script>
+        var page = 1;
+        var thistext = [];
+        var thisaudio;
+        var zoomed = false;
+        var wavesurfer = WaveSurfer.create({
+            container: '#waveform',
+            scrollParent: true,
+            minPxPerSec: 210,
+            plugins: [
+                WaveSurfer.regions.create()
+            ]
+        });
+
+        var infoText = `<p>Welcome!</p>
+        <p>This tool can help you manually align text to audio, or adjust existing alignments.</p>
+        <p>To begin, load an audio file and a TXT or JSON file.</p>
+        <p>Split your text into lines if you use TXT.</p>
+        <p>For a JSON file, it should be like the following:</p>
+        <code>
+            [{"Start": <i>Starting time of this line in millisecond</i>, <br>
+            "Stop": <i>Ending time of this line in millisecond</i>, <br>
+            "Text":<i>The text of this line</i>},
+        ...]
+        </code>
+        <p></p>
+        <p>After loading, play the audio for a few seconds so that the regions on the wave are placed at the correct positions.</p>
+        <p>There are some keyboard shortcuts to help you do your work easilier.</p>
+        <p><code>ENTER</code>: Play/Pause the audio<br>
+            <code>SPACE</code>: Play audio of the current line.<br>
+            <code>UP</code>: Go to previous line.<br>
+            <code>DOWN</code>: Go to next line.<br>
+            <code>LEFT / RIGHT</code>: Move the player cursor backward/forward.<br>
+            <code>CTRL + LEFT / RIGHT</code>: Skip to the previous/next region boundary.<br>
+            <code>F</code>: Set Start. <code>D</code>: Shift Start 10ms later. <code>S</code>: Shift Start 10ms earlier.<br>
+            <code>J</code>: Set End. <code>K</code>: Shift End 10ms earlier. <code>L</code>: Shift End 10ms later.
+            </p>
+        `;
+
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+        var pickfilepg = new Vue({
+            el: "#pickfile",
+            data: {
+                page: page,
+                oktook: true,
+            },
+            methods: {
+                loadaudio: function (event) {
+                    this.oktook = true;
+                    if (event.target.files.length > 0) {
+                        thisaudio = event.target.files[0];
+                        if (thistext.length > 0) this.oktook = false;
+                    }
+                },
+                loadtext: function (event) {
+                    this.oktook = true;
+                    const textloader = new FileReader();
+                    textloader.readAsText(event.target.files[0], 'utf8');
+                    textloader.onload = () => {
+                        if (event.target.files[0].name.toLowerCase().indexOf('.json') == -1) {
+                            let a = textloader.result.split('\n');
+                            for (let i = 0; i < a.length; i++) {
+                                if (a[i].trim().replace(/[\W\s]{1,}/g, '') != '') {
+                                    thistext.push(a[i]);
+                                }
+                            }
+                        } else {
+                            try {
+                                let a = JSON.parse(textloader.result);
+                                if (!(a instanceof Array)) throw new Error("Unsupported JSON detected.");
+                                for (let i = 0; i < a.length; i++) {
+                                    if (a[i].Start == undefined || a[i].Stop == undefined || a[i].Text == undefined) {
+                                        throw new Error("Unsupported JSON detected.");
+                                    } else {
+                                        a[i].index = i;
+                                        a[i].deleted = false;
+                                    }
+                                }
+                                thistext = a;
+                                if (thisaudio != undefined) this.oktook = false;
+
+                            } catch (error) {
+                                msgbox(error, "Error");
+                            }
+                        }
+                    }
+                },
+                startloading: function () {
+                    if (typeof thistext[0] == 'string') {
+                        let a = [];
+                        thistext.forEach((element, index) => {
+                            a.push({ Text: element, Start: '', Stop: '', index: index });
+                        });
+                        maindishpg.thistext = a;
+                    } else {
+                        maindishpg.thistext = thistext;
+                        maindishpg.isjson = true;
+                    }
+                    maindishpg.prepare();
+                    page = 1.5;
+                }
+            },
+        });
+        var loadingpg = new Vue({
+            el: "#loading",
+            data: {
+                page: page
+            }
+        });
+        var maindishpg = new Vue({
+            el: '#maindish',
+            data: {
+                page: page,
+                thistext: [],
+                curid: 0,
+                isjson: false,
+            },
+            methods: {
+                prepare: function () {
+                    if (thisaudio != undefined) {
+                        wavesurfer.loadBlob(thisaudio);
+                    }
+                },
+                clk: function (i) {
+                    if (this.curid != i) this.curid = i;
+                    if (this.thistext[i].Start != '' && this.thistext[i].Stop != '') {
+                        let r = Object.values(wavesurfer.regions.list)[i];
+                        r.play();
+                    }
+                },
+                changeStart: function (event) {
+                    let v = Number(event.target.value)
+                    minorResize(v - this.thistext[this.curid].Start, 1);
+                },
+                changeEnd: function (event) {
+                    let v = Number(event.target.value)
+                    minorResize(v - this.thistext[this.curid].Stop);
+                },
+                changeText: function (event) {
+                    let v = event.target.value.trim();
+                    this.thistext[this.curid].Text = v;
+                },
+                thisdur: function () {
+                    return String(Math.round(wavesurfer.getDuration() * 1000));
+                }
+            }
+        });
+
+        setInterval(() => {
+            pickfilepg.page = page;
+            loadingpg.page = page;
+            maindishpg.page = page;
+            if (page == 2) {
+                $('#waver').toggleClass('d-none', false);
+            } else {
+                $('#waver').toggleClass('d-none', true);
+            }
+        }, 300);
+
+        $("#next").click(() => {
+            if (maindishpg.curid < maindishpg.thistext.length) {
+                maindishpg.curid++;
+                maindishpg.clk(maindishpg.curid);
+            }
+        });
+        $("#prev").click(() => {
+            if (maindishpg.curid > 0) {
+                maindishpg.curid--;
+                maindishpg.clk(maindishpg.curid);
+            }
+        });
+        $("#play").click(() => {
+            wavesurfer.playPause();
+        });
+
+        function makeRegion(id) {
+            wavesurfer.addRegion({
+                id: id,
+                start: maindishpg.thistext[id].Start / 1000,
+                end: maindishpg.thistext[id].Stop / 1000
+            });
+        }
+        function adjustCurRegion() {
+            let J = maindishpg.curid;
+            let r = Object.values(wavesurfer.regions.list);
+            for (let i = 0; i < r.length; i++) {
+                if (Number(r[i].id) == J) {
+                    r[i].start = maindishpg.thistext[J].Start / 1000;
+                    r[i].end = maindishpg.thistext[J].Stop / 1000;
+                    r[i].onResize(0);
+                    break;
+                }
+            }
+        }
+        function setStart() {
+            maindishpg.thistext[maindishpg.curid].Start = Math.round(wavesurfer.getCurrentTime() * 1000);
+            adjustCurRegion();
+        }
+        function setStop(stay = false) {
+            maindishpg.thistext[maindishpg.curid].Stop = Math.round(wavesurfer.getCurrentTime() * 1000);
+            if (maindishpg.thistext[maindishpg.curid].Start != '') {
+                let r = Object.values(wavesurfer.regions.list);
+                let f = false;
+                for (let i = 0; i < r.length; i++) {
+                    if (Number(r[i].id) == maindishpg.curid) {
+                        f = true;
+                        break;
+                    }
+                }
+                if (!f) { makeRegion(maindishpg.curid); } else { adjustCurRegion(); }
+                if (!stay) $("#next").click();
+            }
+        }
+        function minorResize(sec, start) {
+            let r = Object.values(wavesurfer.regions.list)[maindishpg.curid];
+            start == undefined ? r.onResize(sec) : r.onResize(sec, 'start');
+        }
+        $("#setstart").click(() => setStart());
+        $("#setend").click(() => setStop());
+        $("#save").click(() => {
+            let outstr = JSON.stringify(maindishpg.thistext);
+            let copy = JSON.parse(outstr);
+            for (let i = 0; i < copy.length; i++) {
+                if (copy[i].deleted) { copy.splice(i, 1); i--; continue; }
+                delete copy[i].deleted;
+                delete copy[i].index
+            }
+            copy = copy.sort((a, b) => {
+                if (a.Start < b.Start) {
+                    return -1;
+                } else if (a.Start > b.Start) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            });
+            let t = JSON.stringify(copy);
+            let blob = new Blob([t], { type: "text/plain;charset=utf-8" });
+            let dl = window.URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.download = $("#inputaudio")[0].files[0].name.split('.')[0] + '.json';
+            a.href = dl;
+            $("body").append(a);
+            a.click();
+            $(a).remove();
+            URL.revokeObjectURL(dl);
+            delete copy;
+        });
+        $("#split").click(() => {
+            let t = $.extend(true, {}, maindishpg.thistext[maindishpg.curid]);
+            let ct = wavesurfer.getCurrentTime() * 1000;
+            if (ct >= t.Start && ct <= t.Stop) {
+                t.index = maindishpg.thistext.length;
+                maindishpg.thistext.push(t);
+                setStop(true);
+                maindishpg.curid = t.index;
+                wavesurfer.skip(0.1);
+                makeRegion(t.index)
+                setStart();
+            }
+        });
+        $("#add").click(() => {
+            let nl = maindishpg.thistext.push({ Start: "", Stop: "", Text: "", index: maindishpg.thistext.length });
+            maindishpg.clk(nl - 1);
+        });
+        $("#remove").click(() => {
+            if (!maindishpg.thistext[maindishpg.curid].deleted) {
+                maindishpg.thistext[maindishpg.curid].deleted = true;
+                $("p#id" + maindishpg.curid).wrap("<del></del>");
+            } else {
+                maindishpg.thistext[maindishpg.curid].deleted = false;
+                $("p#id" + maindishpg.curid).unwrap();
+            }
+        });
+
+        wavesurfer.on("region-updated", function (r) {
+            maindishpg.thistext[Number(r.id)].Start = Math.round(r.start * 1000);
+            maindishpg.thistext[Number(r.id)].Stop = Math.round(r.end * 1000);
+        });
+        wavesurfer.on('region-click', function (r) {
+            maindishpg.curid = Number(r.id);
+        });
+        wavesurfer.on('region-in', function (r) {
+            maindishpg.curid = Number(r.id);
+            // r.color='hsla(400, 100%, 30%, 0.1)';
+        });
+        wavesurfer.on('region-out', function (r) {
+            // r.color="rgba(0, 0, 0, 0.1)";
+        });
+        wavesurfer.on('ready', function () {
+            if (maindishpg.isjson) {
+                for (let i = 0; i < maindishpg.thistext.length; i++) {
+                    makeRegion(i);
+                }
+            }
+            page = 2;
+        });
+        wavesurfer.on('play', function () {
+            if (!zoomed) { wavesurfer.zoom(211); zoomed = true; }  //Workaround
+        })
+        $(document).keydown((e) => {
+            let i = document.activeElement.id != 'transcript';
+            if (page == 2) {
+                switch (e.which) {
+                    case 13:
+                        if (i) $("#play").click();
+                        break;
+                    case 38:
+                        if (i) {
+                            e.preventDefault();
+                            $("#prev").click();
+                        }
+                        break;
+                    case 40:
+                        if (i) {
+                            e.preventDefault();
+                            $("#next").click();
+                        }
+                        break;
+                    case 37:
+                        if (i) {
+                            e.preventDefault();
+                            if (!e.ctrlKey) {
+                                wavesurfer.skip(-0.01);
+                            } else {
+                                if (Math.round(wavesurfer.getCurrentTime() * 1000) > maindishpg.thistext[maindishpg.curid].Start) {
+                                    wavesurfer.skip(maindishpg.thistext[maindishpg.curid].Start / 1000 - wavesurfer.getCurrentTime());
+                                } else {
+                                    if (maindishpg.curid > 0) {
+                                        maindishpg.curid--;
+                                        wavesurfer.skip(maindishpg.thistext[maindishpg.curid].Stop / 1000 - wavesurfer.getCurrentTime());
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case 39:
+                        if (i) {
+                            e.preventDefault();
+                            if (!e.ctrlKey) {
+                                wavesurfer.skip(0.01);
+                            } else {
+                                if (Math.round(wavesurfer.getCurrentTime() * 1000) < maindishpg.thistext[maindishpg.curid].Stop) {
+                                    wavesurfer.skip(maindishpg.thistext[maindishpg.curid].Stop / 1000 - wavesurfer.getCurrentTime());
+                                } else {
+                                    if (maindishpg.curid < maindishpg.thistext.length - 1) {
+                                        maindishpg.curid++;
+                                        wavesurfer.skip(maindishpg.thistext[maindishpg.curid].Start / 1000 - wavesurfer.getCurrentTime());
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case 70://f
+                        if (i) setStart();
+                        break;
+                    case 74://j
+                        if (i) setStop();
+                        break;
+                    case 83: //s
+                        if (i) minorResize(-0.01, 1);
+                        break;
+                    case 68://d
+                        if (i) minorResize(0.01, 1);
+                        break;
+                    case 75://k
+                        if (i) minorResize(-0.01);
+                        break;
+                    case 76://l
+                        if (i) minorResize(0.01);
+                        break;
+                    case 32:
+                        if (i) {
+                            e.preventDefault();
+                            if (wavesurfer.isPlaying()) {
+                                wavesurfer.pause();
+                            } else {
+                                maindishpg.clk(maindishpg.curid);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        })
+    </script>
+</body>
+
+</html>
